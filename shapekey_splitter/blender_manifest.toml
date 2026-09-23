@@ -1,0 +1,13 @@
+schema_version = "1.0.0"
+id = "shapekey_splitter"
+version = "1.0.0"
+name = "Shape Key Splitter"
+tagline = "Split shape keys by axis and painted mask regions"
+maintainer = "Developer"
+type = "add-on"
+blender_version_min = "5.0.0"
+license = ["SPDX:GPL-3.0-or-later"]
+copyright = ["2025 Developer"]
+
+[build]
+paths_exclude_pattern = ["__pycache__/", ".git/", "*.zip", "*.md"]
