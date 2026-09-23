@@ -9,7 +9,7 @@ DEFAULT_MASKS = [
 class SHAPEKEY_OT_add_default_masks(bpy.types.Operator):
     bl_idname = "shapekey_splitter.add_default_masks"
     bl_label = "Add Default Masks"
-    bl_description = "Add default mask regions (Mouth, Eye_L, Eye_R) if not already present"
+    bl_description = "Add the default mask regions (Eyes, Mouth) and their vertex groups if not already present"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -52,15 +52,19 @@ class SHAPEKEY_OT_mask_add(bpy.types.Operator):
         obj = context.object
         settings = obj.shapekey_splitter
 
+        name = self.name.strip()
+        if not name:
+            self.report({'WARNING'}, "Mask name cannot be empty")
+            return {'CANCELLED'}
+
         item = settings.masks.add()
-        item.name = self.name
+        item.name = name
         item.is_bilateral = True
 
-        vg_name = self.name.lower().replace(' ', '_')
-        item.vertex_group = vg_name
-
+        vg_name = name.lower().replace(' ', '_')
         if vg_name not in obj.vertex_groups:
-            obj.vertex_groups.new(name=vg_name)
+            vg_name = obj.vertex_groups.new(name=vg_name).name
+        item.vertex_group = vg_name
 
         settings.active_mask_index = len(settings.masks) - 1
         return {'FINISHED'}
@@ -122,16 +126,31 @@ class SHAPEKEY_OT_mask_rename(bpy.types.Operator):
         if idx >= len(settings.masks):
             return {'CANCELLED'}
 
+        new_name = self.new_name.strip()
+        if not new_name:
+            self.report({'WARNING'}, "Mask name cannot be empty")
+            return {'CANCELLED'}
+
         mask = settings.masks[idx]
         old_vg_name = mask.vertex_group
-        new_vg_name = self.new_name.lower().replace(' ', '_')
+        new_vg_name = new_name.lower().replace(' ', '_')
 
         vg = obj.vertex_groups.get(old_vg_name)
-        if vg is not None:
+        if vg is not None and vg.name != new_vg_name:
+            if new_vg_name in obj.vertex_groups:
+                self.report(
+                    {'ERROR'},
+                    f"Vertex group '{new_vg_name}' already exists — rename or remove it first",
+                )
+                return {'CANCELLED'}
             vg.name = new_vg_name
 
-        mask.name = self.new_name
-        mask.vertex_group = new_vg_name
+        cl = settings.centerline
+        if cl.preview_mask == mask.name:
+            cl.preview_mask = new_name
+
+        mask.name = new_name
+        mask.vertex_group = vg.name if vg is not None else new_vg_name
         return {'FINISHED'}
 
 

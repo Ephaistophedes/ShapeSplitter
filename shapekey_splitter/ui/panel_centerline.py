@@ -1,4 +1,5 @@
 import bpy
+from ..operators.op_preview import find_preview_mask, is_preview_active
 
 
 class SHAPEKEY_PT_centerline(bpy.types.Panel):
@@ -22,7 +23,6 @@ class SHAPEKEY_PT_centerline(bpy.types.Panel):
         cl = settings.centerline
 
         layout.prop(cl, "transition_type")
-        layout.prop(cl, "blend_distance")
         layout.prop(cl, "blend_falloff")
         layout.prop(cl, "center_threshold")
 
@@ -38,18 +38,27 @@ class SHAPEKEY_PT_centerline(bpy.types.Panel):
             layout.label(text="No shape keys on this mesh", icon='INFO')
 
         # Mask selector
+        show_side = True
         if settings.masks:
             layout.prop_search(cl, "preview_mask", settings, "masks", text="Mask")
             if cl.preview_mask:
-                active_mask = next(
-                    (m for m in settings.masks if m.name == cl.preview_mask), None
-                )
-                if active_mask and active_mask.is_bilateral:
-                    row = layout.row()
-                    row.prop(cl, "preview_side", expand=True)
+                active_mask = find_preview_mask(settings)
+                if active_mask is None:
+                    layout.label(text=f"Mask '{cl.preview_mask}' not found", icon='ERROR')
+                else:
+                    show_side = active_mask.is_bilateral
+                    if not active_mask.enabled:
+                        layout.label(text="Mask is disabled — not included in splits", icon='INFO')
+        if show_side:
+            row = layout.row()
+            row.prop(cl, "preview_side", expand=True)
+
+        active = is_preview_active(obj)
+        if active:
+            layout.prop(cl, "preview_strength", slider=True)
 
         row = layout.row(align=True)
-        if cl.preview_active:
+        if active:
             row.alert = True
             row.operator("shapekey_splitter.preview_stop", icon='PAUSE', text="Exit Preview")
         else:

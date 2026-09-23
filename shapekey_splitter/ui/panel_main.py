@@ -1,5 +1,7 @@
 import bpy
 from ..utils.mesh_utils import check_scale_applied
+from ..core.splitter import PREVIEW_KEY_NAME
+from ..operators.op_preview import is_preview_active
 
 
 class SHAPEKEY_PT_main(bpy.types.Panel):
@@ -31,6 +33,13 @@ class SHAPEKEY_PT_main(bpy.types.Panel):
             warn = layout.box()
             warn.alert = True
             warn.label(text="Apply scale (Ctrl+A) before splitting!", icon='ERROR')
+
+        # --- Preview warning ---
+        if is_preview_active(obj):
+            warn = layout.box()
+            warn.alert = True
+            warn.label(text=f"Preview active ('{PREVIEW_KEY_NAME}' key)", icon='HIDE_OFF')
+            warn.operator("shapekey_splitter.preview_stop", icon='PAUSE', text="Exit Preview")
 
         # --- No shape keys warning ---
         sk = obj.data.shape_keys

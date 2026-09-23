@@ -5,20 +5,25 @@ using a configurable center-line blend and painted vertex-group masks. It is bui
 game-engine blendshapes (Unity / Unreal). Every split is baked into its own mesh object in an
 output collection, and a preview mesh gathers all the splits back together as shape keys.
 
-> **Status:** early (v1.0.0). It works end to end, but a debugging and improvement pass is
-> in progress. See [docs/known_issues.md](docs/known_issues.md).
+> **Status:** v1.1.0. The first debugging pass is done (see [CHANGELOG.md](CHANGELOG.md));
+> open items are tracked in [docs/known_issues.md](docs/known_issues.md).
 
 ## Features
 
-- **Center-line L/R split** with an adjustable blend start, falloff width and curve
-  (Linear, Smooth, Bell, Ease In, Ease Out, Ease In/Out). `L + R = 1` at every vertex,
-  so the two halves always add up to the original shape.
+- **Center-line L/R split** with a transition zone centered on X = 0. You set its width and
+  curve (Linear, Smooth, Bell, Ease In, Ease Out, Ease In/Out). `L + R = 1` at every vertex,
+  so the two halves always add up to the original shape, and `R` is an exact mirror image
+  of `L`. Seam vertices (within *Center Threshold* of X = 0) are split exactly 50/50.
 - **Mask regions** backed by vertex groups:
   - *Bilateral* masks give `<key>_<mask>_L` and `<key>_<mask>_R`.
-  - *Single-side* masks give `<key>_<mask>`.
+  - *Single-side* masks give `<key>_<mask>`. The painted weights alone define the region,
+    so they work on either side, e.g. `Eye_L` and `Eye_R`.
 - **Mirror weights L→R**: paint the left side, then copy the weights to the matching
-  right-side vertices. Works per mask or for all enabled masks.
-- **Live preview** of the split on one shape key, with sliders for strength, mask and side.
+  right-side vertices. Works per mask or for all enabled bilateral masks. Single-side masks
+  are never mirrored.
+- **Live preview** of the split on one shape key, with controls for strength, mask and side.
+  The result is shown on a temporary `SKS_Preview` shape key, and your shape keys are
+  never modified.
 - **Non-destructive output**: the source object is never changed. Results go into
   `<Object>_ShapeSplits`:
   - one mesh per split, with the shape baked into the geometry
@@ -49,16 +54,19 @@ scripts after each change.
 Open the **3D Viewport → Sidebar (N) → Shape Splitter** tab with a mesh selected.
 
 1. **Apply scale** (Ctrl+A) on the mesh. The panel warns you if it is not applied. The
-   mesh should be symmetric across local X = 0, with a reference key named `Basis`.
-2. **Center Line Settings**: pick the transition curve, blend start and falloff.
+   mesh should be symmetric across local X = 0. Each shape key is split using its delta
+   against its own *Relative To* key, as Blender evaluates it.
+2. **Center Line Settings**: pick the transition curve and blend width.
 3. **Mask Regions** (optional): add masks, or click *Add Default Masks*. Use *Edit Mask*
    to paint each vertex group in Weight Paint mode, then *Mirror Weights L→R* (or paint
    with X-Mirror on).
 4. **Preview** (optional): pick a shape key and, if you want, a mask and side. Click
-   *Enter Preview Mode* and adjust the settings live. Click *Exit Preview* before you save
-   the file (see known issues).
-5. Click **Split All Shape Keys**. Use **Regenerate All** after you change weights or
-   settings: it clears the output collection and runs the split again.
+   *Enter Preview Mode* and adjust the settings live. Click *Exit Preview* to remove the
+   temporary `SKS_Preview` key. If you save while previewing, the key is saved too, and
+   the panel offers *Exit Preview* after you reopen the file.
+5. Click **Split All Shape Keys**. It replaces outputs of the same name in the output
+   collection. **Regenerate All** clears the collection first, which also removes outputs
+   of shape keys or masks you have deleted since.
 
 ### Output naming (separator `_`)
 
@@ -69,6 +77,17 @@ Open the **3D Viewport → Sidebar (N) → Shape Splitter** tab with a mesh sele
 | `smile` + single-side mask `Eye_L` | `smile_eye_l` |
 
 You can change the separator in the main panel (for example `.` gives `smile.L`).
+
+## Running the tests
+
+The tests run the add-on headless inside Blender, on synthetic meshes and on
+`test_scenes/Test_Scene.blend`:
+
+```sh
+blender -b --factory-startup --python tests/run_tests.py
+# or, with the bpy module from PyPI (Python 3.11):
+pip install bpy==5.0.0 && python tests/run_tests.py
+```
 
 ## Repository layout
 
@@ -82,7 +101,9 @@ shapekey_splitter/        The add-on (extension root, contains blender_manifest.
 docs/
   shapekey_splitter_plan.md            Original design plan
   blender5_addon_development_guide.md  Blender 5 API / extension reference notes
-  known_issues.md                      Debugging backlog
+  known_issues.md                      Open issues and limitations
+tests/
+  run_tests.py            Headless regression tests (unittest)
 test_scenes/
   Test_Scene.blend        Scene for manual testing
 ```

@@ -1,18 +1,20 @@
 import bpy
 from ..core.weights import mirror_weights_left_to_right
+from .op_preview import apply_preview
 
 
 class SHAPEKEY_OT_mirror_weights(bpy.types.Operator):
     bl_idname = "shapekey_splitter.mirror_weights"
     bl_label = "Mirror Weights L\u2192R"
     bl_description = (
-        "Copy vertex group weights from the left side (X<0) to matching right-side vertices"
+        "Copy vertex group weights from the left side (X<0) to matching right-side vertices. "
+        "Without a specific group, all enabled bilateral masks are mirrored"
     )
     bl_options = {'REGISTER', 'UNDO'}
 
     vertex_group: bpy.props.StringProperty(
         name="Vertex Group",
-        description="Specific vertex group to mirror. Leave empty to mirror all active masks",
+        description="Specific vertex group to mirror. Leave empty to mirror all enabled bilateral masks",
         default="",
     )
 
@@ -33,10 +35,11 @@ class SHAPEKEY_OT_mirror_weights(bpy.types.Operator):
         if self.vertex_group:
             vg_names = [self.vertex_group]
         else:
+            # Single-side masks (e.g. Eye_L) must not be mirrored onto the other side
             vg_names = [
                 m.vertex_group
                 for m in settings.masks
-                if m.enabled and m.vertex_group
+                if m.enabled and m.is_bilateral and m.vertex_group
             ]
 
         if not vg_names:
@@ -49,6 +52,8 @@ class SHAPEKEY_OT_mirror_weights(bpy.types.Operator):
             total += count
             for w in warnings:
                 self.report({'WARNING'}, w)
+
+        apply_preview(obj)
 
         self.report(
             {'INFO'},

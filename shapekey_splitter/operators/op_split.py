@@ -1,51 +1,68 @@
 import bpy
 from ..core import splitter as splitter_mod
-from ..core import centerline as cl_mod
-from ..utils.mesh_utils import unique_name, get_shape_key_positions
+from ..utils.mesh_utils import unique_name
 
 
 def _run_split(obj, context) -> tuple:
     """
     Core split logic shared by split_all and regenerate_all.
-    Returns (split_objects, collection, count).
+    Outputs with the same name as an object already in the collection replace it.
+    Returns (split_objects, collection, renamed) where renamed lists outputs
+    whose object name clashed with an object outside the collection.
     """
-    settings = obj.shapekey_splitter
-    col = splitter_mod.get_or_create_output_collection(obj, settings)
+    # Edit Mode changes live in the edit-mesh until synced back to the mesh
+    if obj.mode == 'EDIT':
+        obj.update_from_editmode()
 
-    shape_keys = obj.data.shape_keys
+    settings = obj.shapekey_splitter
+    col = splitter_mod.get_or_create_output_collection(obj, settings, context.scene)
+
+    ctx = splitter_mod.SplitContext(obj, settings)
+    template_mesh = splitter_mod.make_template_mesh(obj, ctx.ref_co)
+
     split_objects = []
+    outputs = []
+    renamed = []
     used_names = set()
 
-    # Compute centerline weights once — identical for every shape key in the batch
-    precomputed_weights = None
-    basis = shape_keys.key_blocks.get("Basis")
-    if basis is not None:
-        cl = settings.centerline
-        basis_co = get_shape_key_positions(basis)
-        precomputed_weights = cl_mod.compute_centerline_weights(
-            basis_co[:, 0], cl.blend_distance, cl.blend_falloff, cl.transition_type
+    try:
+        for kb in splitter_mod.split_candidates(obj):
+            split_results = splitter_mod.split_shape_key(kb, ctx)
+
+            for out_name, positions in split_results.items():
+                final_name = unique_name(out_name, used_names)
+                used_names.add(final_name)
+                split_obj = splitter_mod.create_split_mesh_object(
+                    obj, template_mesh, positions, final_name, col
+                )
+                if split_obj.name != final_name:
+                    renamed.append(final_name)
+                split_objects.append(split_obj)
+                outputs.append((final_name, positions))
+
+        splitter_mod.build_preview_mesh(obj, template_mesh, outputs, col)
+    finally:
+        bpy.data.meshes.remove(template_mesh)
+
+    return split_objects, col, renamed
+
+
+def _report_renamed(op, renamed) -> None:
+    if renamed:
+        op.report(
+            {'WARNING'},
+            f"{len(renamed)} output(s) got a numeric suffix because an object with the "
+            f"same name exists outside the output collection (e.g. '{renamed[0]}')",
         )
-
-    for kb in shape_keys.key_blocks:
-        if kb.name == "Basis":
-            continue
-
-        split_results = splitter_mod.split_shape_key(obj, kb.name, settings, precomputed_weights)
-
-        for out_name, positions in split_results.items():
-            final_name = unique_name(out_name, used_names)
-            used_names.add(final_name)
-            split_obj = splitter_mod.create_split_mesh_object(obj, positions, final_name, col)
-            split_objects.append(split_obj)
-
-    splitter_mod.build_preview_mesh(obj, split_objects, col)
-    return split_objects, col, len(split_objects)
 
 
 class SHAPEKEY_OT_split_all(bpy.types.Operator):
     bl_idname = "shapekey_splitter.split_all"
     bl_label = "Split All Shape Keys"
-    bl_description = "Split every shape key into directional L/R and mask variants"
+    bl_description = (
+        "Split every shape key into directional L/R and mask variants. "
+        "Existing outputs with the same name are replaced"
+    )
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -53,15 +70,16 @@ class SHAPEKEY_OT_split_all(bpy.types.Operator):
         obj = context.object
         if obj is None or obj.type != 'MESH':
             return False
-        sk = obj.data.shape_keys
-        if sk is None or len(sk.key_blocks) <= 1:
+        if not splitter_mod.split_candidates(obj):
+            cls.poll_message_set("Object has no shape keys to split")
             return False
         return True
 
     def execute(self, context):
         obj = context.object
-        _, col, count = _run_split(obj, context)
-        self.report({'INFO'}, f"Generated {count} meshes in '{col.name}'")
+        split_objects, col, renamed = _run_split(obj, context)
+        _report_renamed(self, renamed)
+        self.report({'INFO'}, f"Generated {len(split_objects)} meshes in '{col.name}'")
         return {'FINISHED'}
 
 
@@ -78,8 +96,12 @@ class SHAPEKEY_OT_regenerate_all(bpy.types.Operator):
     def execute(self, context):
         obj = context.object
         settings = obj.shapekey_splitter
-        col = splitter_mod.get_or_create_output_collection(obj, settings)
+        col = splitter_mod.get_or_create_output_collection(obj, settings, context.scene)
+        if obj.name in col.objects:
+            self.report({'ERROR'}, f"'{obj.name}' is inside the output collection '{col.name}'")
+            return {'CANCELLED'}
         splitter_mod.clear_output_collection(col)
-        _, _, count = _run_split(obj, context)
-        self.report({'INFO'}, f"Regenerated {count} meshes in '{col.name}'")
+        split_objects, _, renamed = _run_split(obj, context)
+        _report_renamed(self, renamed)
+        self.report({'INFO'}, f"Regenerated {len(split_objects)} meshes in '{col.name}'")
         return {'FINISHED'}

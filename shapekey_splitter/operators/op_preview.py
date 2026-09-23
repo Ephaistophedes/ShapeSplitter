@@ -1,184 +1,141 @@
 """
-Interactive preview of the centerline split on a single shape key.
+Interactive preview of the split on a single shape key.
 
-preview_active is SKIP_SAVE so it never persists across file reloads.
-The backup dict is module-level (session memory only).
+The preview is written into a temporary shape key (PREVIEW_KEY_NAME) that is
+shown solo via "Shape Key Lock" (show_only_shape_key). The source shape keys are
+never modified. Whether preview is active is derived from the existence of that
+key, so the state stays correct across undo, file save/reload, object renames
+and add-on reloads.
 """
 
 import bpy
 import numpy as np
 
-from ..core import centerline as cl_mod
-from ..utils.mesh_utils import get_shape_key_positions, get_vertex_group_weights
-
-# {(obj_name, sk_name): (flat (N*3,) float32 original positions, original value)}
-_preview_backup: dict = {}
+from ..core import splitter as splitter_mod
+from ..core.splitter import PREVIEW_KEY_NAME
 
 
-def _save_backup(obj, sk) -> None:
-    """Snapshot shape key positions and value into _preview_backup."""
-    backup = np.empty(len(sk.data) * 3, dtype=np.float32)
-    sk.data.foreach_get("co", backup)
-    _preview_backup[(obj.name, sk.name)] = (backup, sk.value)
-
-
-def apply_preview(obj, sk_name: str, strength: float, settings) -> None:
-    """
-    Write a preview split into shape key data directly.
-    Only the L-weighted version is shown (for simplicity in preview).
-    Restores nothing — call stop_preview to undo.
-    """
-    if not sk_name:
-        return
-
-    mesh = obj.data
-    shape_keys = mesh.shape_keys
+def get_preview_key(obj):
+    shape_keys = obj.data.shape_keys if obj is not None and obj.type == 'MESH' else None
     if shape_keys is None:
+        return None
+    return shape_keys.key_blocks.get(PREVIEW_KEY_NAME)
+
+
+def is_preview_active(obj) -> bool:
+    return get_preview_key(obj) is not None
+
+
+def find_preview_mask(settings):
+    """The mask selected for preview (enabled or not), or None."""
+    name = settings.centerline.preview_mask
+    if not name:
+        return None
+    return next((m for m in settings.masks if m.name == name), None)
+
+
+def apply_preview(obj) -> None:
+    """Recompute the preview key from the current settings."""
+    pk = get_preview_key(obj)
+    if pk is None:
         return
 
-    sk = shape_keys.key_blocks.get(sk_name)
-    basis = shape_keys.key_blocks.get("Basis")
-    if sk is None or basis is None:
-        return
-
-    backup_key = (obj.name, sk_name)
-    if backup_key not in _preview_backup:
-        return  # not started, do nothing
-
-    basis_co = get_shape_key_positions(basis)       # (N, 3)
-    orig_co = _preview_backup[backup_key][0].reshape(-1, 3)
-    delta = orig_co - basis_co
-
+    shape_keys = obj.data.shape_keys
+    settings = obj.shapekey_splitter
     cl = settings.centerline
-    x_coords = basis_co[:, 0]
+    ref = shape_keys.reference_key
 
-    weight_L, weight_R = cl_mod.compute_centerline_weights(
-        x_coords,
-        cl.blend_distance,
-        cl.blend_falloff,
-        cl.transition_type,
-    )
+    mask = find_preview_mask(settings)
+    ctx = splitter_mod.SplitContext(obj, settings, masks=[mask] if mask else [])
 
-    # Determine final per-vertex weight
-    final_weight = weight_L  # default: pure L split
-    if cl.preview_mask:
-        mask = next(
-            (m for m in settings.masks if m.name == cl.preview_mask and m.enabled),
-            None,
-        )
-        if mask is not None:
-            mask_w = get_vertex_group_weights(obj, mask.vertex_group)
-            if mask.is_bilateral and cl.preview_side == 'R':
-                final_weight = mask_w * weight_R
-            else:
-                final_weight = mask_w * weight_L
+    sk = shape_keys.key_blocks.get(cl.preview_shapekey)
+    if sk is None or sk == pk or sk == ref:
+        positions = ctx.ref_co
+    else:
+        side_w = ctx.weight_R if cl.preview_side == 'R' else ctx.weight_L
+        if ctx.masks:
+            mask_w = ctx.masks[0][1]
+            final_weight = mask_w * side_w if mask.is_bilateral else mask_w
+        else:
+            final_weight = side_w
 
-    preview_co = basis_co + delta * (final_weight[:, np.newaxis] * strength)
-    sk.data.foreach_set("co", preview_co.reshape(-1).astype(np.float32))
-    mesh.update()
+        delta = splitter_mod.shape_key_delta(sk)
+        positions = ctx.ref_co + delta * (final_weight[:, np.newaxis] * cl.preview_strength)
+
+    pk.relative_key = ref
+    pk.data.foreach_set("co", positions.reshape(-1).astype(np.float32))
+    pk.value = 1.0
+    obj.data.update()
 
 
-def switch_preview_shapekey(obj, new_sk_name: str, settings) -> None:
-    """
-    While preview is active, restore the currently previewed shape key and
-    switch to new_sk_name. Called when the user picks a different shape key
-    in the UI during an active preview session.
-    """
-    mesh = obj.data
-    if mesh.shape_keys is None:
-        return
-
-    # Restore any shape key currently being previewed for this object
-    for key in list(_preview_backup.keys()):
-        obj_name, old_sk_name = key
-        if obj_name != obj.name:
-            continue
-        sk = mesh.shape_keys.key_blocks.get(old_sk_name)
-        if sk is not None:
-            positions, orig_value = _preview_backup[key]
-            sk.data.foreach_set("co", positions)
-            sk.value = orig_value
-            mesh.update()
-        _preview_backup.pop(key, None)
-
-    if not new_sk_name:
-        return
-
-    sk = mesh.shape_keys.key_blocks.get(new_sk_name)
-    if sk is None:
-        return
-
-    _save_backup(obj, sk)
-    sk.value = 1.0
-    apply_preview(obj, new_sk_name, settings.centerline.preview_strength, settings)
+def _preview_poll(cls, context, want_active: bool) -> bool:
+    obj = context.object
+    if obj is None or obj.type != 'MESH':
+        return False
+    if obj.data.shape_keys is None:
+        cls.poll_message_set("Object has no shape keys")
+        return False
+    if context.mode not in ('OBJECT', 'PAINT_WEIGHT'):
+        cls.poll_message_set("Preview is only available in Object and Weight Paint mode")
+        return False
+    return is_preview_active(obj) == want_active
 
 
 class SHAPEKEY_OT_preview_start(bpy.types.Operator):
     bl_idname = "shapekey_splitter.preview_start"
     bl_label = "Enter Preview Mode"
-    bl_description = "Preview the centerline L-split on the selected shape key"
+    bl_description = (
+        "Preview the split on the selected shape key. The result is shown on a "
+        f"temporary '{PREVIEW_KEY_NAME}' shape key; the original is not modified"
+    )
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
-        obj = context.object
-        if obj is None or obj.type != 'MESH':
-            return False
-        if obj.data.shape_keys is None:
-            return False
-        return not obj.shapekey_splitter.centerline.preview_active
+        return _preview_poll(cls, context, want_active=False)
 
     def execute(self, context):
         obj = context.object
-        settings = obj.shapekey_splitter
-        cl = settings.centerline
+        cl = obj.shapekey_splitter.centerline
+        shape_keys = obj.data.shape_keys
 
         if not cl.preview_shapekey:
             self.report({'WARNING'}, "No shape key selected for preview")
             return {'CANCELLED'}
 
-        sk = obj.data.shape_keys.key_blocks.get(cl.preview_shapekey)
-        if sk is None:
-            self.report({'WARNING'}, f"Shape key '{cl.preview_shapekey}' not found")
+        sk = shape_keys.key_blocks.get(cl.preview_shapekey)
+        if sk is None or sk == shape_keys.reference_key:
+            self.report({'WARNING'}, f"'{cl.preview_shapekey}' is not a shape key that can be split")
             return {'CANCELLED'}
 
-        _save_backup(obj, sk)
-        cl.preview_active = True
-        sk.value = 1.0
-        apply_preview(obj, cl.preview_shapekey, cl.preview_strength, settings)
+        cl.preview_restore_index = obj.active_shape_key_index
+        cl.preview_restore_show_only = obj.show_only_shape_key
+
+        pk = obj.shape_key_add(name=PREVIEW_KEY_NAME, from_mix=False)
+        obj.active_shape_key_index = shape_keys.key_blocks.find(pk.name)
+        obj.show_only_shape_key = True
+        apply_preview(obj)
         return {'FINISHED'}
 
 
 class SHAPEKEY_OT_preview_stop(bpy.types.Operator):
     bl_idname = "shapekey_splitter.preview_stop"
     bl_label = "Exit Preview Mode"
-    bl_description = "Restore the original shape key and exit preview"
+    bl_description = f"Remove the temporary '{PREVIEW_KEY_NAME}' shape key and exit preview"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
-        obj = context.object
-        if obj is None or obj.type != 'MESH':
-            return False
-        if obj.data.shape_keys is None:
-            return False
-        return obj.shapekey_splitter.centerline.preview_active
+        return _preview_poll(cls, context, want_active=True)
 
     def execute(self, context):
         obj = context.object
-        settings = obj.shapekey_splitter
-        cl = settings.centerline
+        cl = obj.shapekey_splitter.centerline
 
-        backup_key = (obj.name, cl.preview_shapekey)
-        if backup_key in _preview_backup:
-            mesh = obj.data
-            sk = mesh.shape_keys.key_blocks.get(cl.preview_shapekey) if mesh.shape_keys else None
-            if sk is not None:
-                positions, orig_value = _preview_backup[backup_key]
-                sk.data.foreach_set("co", positions)
-                sk.value = orig_value
-                mesh.update()
-            del _preview_backup[backup_key]
+        obj.shape_key_remove(get_preview_key(obj))
 
-        cl.preview_active = False
+        n_keys = len(obj.data.shape_keys.key_blocks) if obj.data.shape_keys else 0
+        obj.active_shape_key_index = max(0, min(cl.preview_restore_index, n_keys - 1))
+        obj.show_only_shape_key = cl.preview_restore_show_only
+        obj.data.update()
         return {'FINISHED'}

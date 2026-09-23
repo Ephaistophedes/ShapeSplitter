@@ -60,13 +60,18 @@ class SHAPEKEY_PT_masks(bpy.types.Panel):
             box.prop_search(mask, "vertex_group", obj, "vertex_groups", text="Vertex Group")
             box.prop(mask, "is_bilateral")
 
-            row2 = box.row(align=True)
-            op = row2.operator(
-                "shapekey_splitter.mirror_weights",
-                text="Mirror Weights L\u2192R",
-                icon='MOD_MIRROR',
-            )
-            op.vertex_group = mask.vertex_group
+            if mask.is_bilateral:
+                row2 = box.row(align=True)
+                op = row2.operator(
+                    "shapekey_splitter.mirror_weights",
+                    text="Mirror Weights L\u2192R",
+                    icon='MOD_MIRROR',
+                )
+                op.vertex_group = mask.vertex_group
+            else:
+                box.label(text="Single-side: paint the region directly", icon='INFO')
+            if mask.vertex_group not in obj.vertex_groups:
+                box.label(text=f"Vertex group '{mask.vertex_group}' not found", icon='ERROR')
 
             is_editing = context.mode == 'PAINT_WEIGHT'
             edit_row = box.row()
