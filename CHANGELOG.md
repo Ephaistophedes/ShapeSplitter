@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0
+
+- **Shape key checklist.** The main panel lists the mesh's shape keys with a check mark on
+  each; only checked keys are split. *Select All* and *Clear Selection* buttons check or
+  uncheck every key, and the list has Blender's usual name filter. The reference key and
+  the temporary preview key are not listed.
+- New shape keys are checked by default. The selection is saved per object in the
+  `.blend` file.
+- Split / Regenerate are disabled when no key is checked.
+
 ## 1.1.0
 
 Bug fixes from the first review of v1.0.0. Every fix has a test in `tests/run_tests.py`.

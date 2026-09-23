@@ -1,15 +1,17 @@
 if "bpy" in locals():
     import importlib
-    from . import panel_main, panel_centerline, panel_masks
+    from . import panel_keys, panel_main, panel_centerline, panel_masks
+    importlib.reload(panel_keys)
     importlib.reload(panel_main)
     importlib.reload(panel_centerline)
     importlib.reload(panel_masks)
 else:
-    from . import panel_main, panel_centerline, panel_masks
+    from . import panel_keys, panel_main, panel_centerline, panel_masks
 
 import bpy
 
 classes = (
+    panel_keys.SHAPEKEY_UL_shape_keys,
     panel_masks.SHAPEKEY_UL_masks,
     panel_main.SHAPEKEY_PT_main,
     panel_centerline.SHAPEKEY_PT_centerline,

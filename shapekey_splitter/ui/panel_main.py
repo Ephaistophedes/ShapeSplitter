@@ -2,6 +2,7 @@ import bpy
 from ..utils.mesh_utils import check_scale_applied
 from ..core.splitter import PREVIEW_KEY_NAME
 from ..operators.op_preview import is_preview_active
+from .panel_keys import draw_shape_key_list
 
 
 class SHAPEKEY_PT_main(bpy.types.Panel):
@@ -59,9 +60,12 @@ class SHAPEKEY_PT_main(bpy.types.Panel):
 
         layout.separator()
 
+        # --- Shape key selection ---
+        n_selected = draw_shape_key_list(layout, obj) if has_sk else 0
+
         # --- Main action buttons ---
         col = layout.column(align=True)
         col.scale_y = 1.5
-        col.enabled = has_sk
+        col.enabled = n_selected > 0
         col.operator("shapekey_splitter.split_all",      icon='SHADERFX')
         col.operator("shapekey_splitter.regenerate_all", icon='FILE_REFRESH')

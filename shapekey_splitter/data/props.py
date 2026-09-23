@@ -100,7 +100,15 @@ class CenterLineSettings(bpy.types.PropertyGroup):
     preview_restore_show_only: bpy.props.BoolProperty(options={'HIDDEN'})
 
 
+class ShapeKeyNameItem(bpy.types.PropertyGroup):
+    """A shape key referenced by name (uses the built-in PropertyGroup.name)."""
+
+
 class ShapeKeySplitterSettings(bpy.types.PropertyGroup):
+    # Shape keys unchecked in the list. Stored as exclusions so that newly
+    # added shape keys are checked (included) by default.
+    excluded_keys: bpy.props.CollectionProperty(type=ShapeKeyNameItem)
+    active_key_index: bpy.props.IntProperty(default=0, min=0)
     masks: bpy.props.CollectionProperty(type=MaskRegionItem)
     active_mask_index: bpy.props.IntProperty(default=0, min=0)
     centerline: bpy.props.PointerProperty(type=CenterLineSettings)

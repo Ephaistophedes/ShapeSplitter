@@ -373,6 +373,54 @@ class TestMasks(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Shape key selection
+# ---------------------------------------------------------------------------
+
+class TestKeySelection(unittest.TestCase):
+    def setUp(self):
+        reset_scene()
+        self.obj = make_grid()
+        self.obj.shape_key_add(name="Frown", from_mix=False)
+        self.obj.shapekey_splitter.include_full_lr = True
+
+    def split_names(self):
+        self.assertEqual(run_op(bpy.ops.shapekey_splitter.regenerate_all, self.obj), {'FINISHED'})
+        preview = outputs(self.obj)["Face_Preview"]
+        return sorted(k.name for k in preview.data.shape_keys.key_blocks[1:])
+
+    def test_all_keys_selected_by_default(self):
+        self.assertEqual(self.split_names(), ["Frown_L", "Frown_R", "Smile_L", "Smile_R"])
+
+    def test_unchecked_key_is_not_split(self):
+        run_op(bpy.ops.shapekey_splitter.key_toggle, self.obj, name="Frown")
+        self.assertEqual(self.split_names(), ["Smile_L", "Smile_R"])
+        self.assertNotIn("Frown_L", outputs(self.obj))
+        run_op(bpy.ops.shapekey_splitter.key_toggle, self.obj, name="Frown")
+        self.assertEqual(self.split_names(), ["Frown_L", "Frown_R", "Smile_L", "Smile_R"])
+
+    def test_clear_selection_and_select_all(self):
+        run_op(bpy.ops.shapekey_splitter.keys_clear_selection, self.obj)
+        with bpy.context.temp_override(object=self.obj, active_object=self.obj):
+            self.assertFalse(bpy.ops.shapekey_splitter.split_all.poll())
+            self.assertFalse(bpy.ops.shapekey_splitter.regenerate_all.poll())
+        run_op(bpy.ops.shapekey_splitter.keys_select_all, self.obj)
+        self.assertEqual(self.split_names(), ["Frown_L", "Frown_R", "Smile_L", "Smile_R"])
+
+    def test_new_keys_are_selected(self):
+        run_op(bpy.ops.shapekey_splitter.keys_clear_selection, self.obj)
+        self.obj.shape_key_add(name="Blink", from_mix=False)
+        self.assertEqual(self.split_names(), ["Blink_L", "Blink_R"])
+
+    def test_selection_is_saved(self):
+        run_op(bpy.ops.shapekey_splitter.key_toggle, self.obj, name="Smile")
+        path = os.path.join(tempfile.mkdtemp(), "selection.blend")
+        bpy.ops.wm.save_as_mainfile(filepath=path)
+        bpy.ops.wm.open_mainfile(filepath=path)
+        self.obj = bpy.data.objects["Face"]
+        self.assertEqual(self.split_names(), ["Frown_L", "Frown_R"])
+
+
+# ---------------------------------------------------------------------------
 # Test scene (skipped if the .blend is missing)
 # ---------------------------------------------------------------------------
 

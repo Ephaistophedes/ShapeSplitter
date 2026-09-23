@@ -26,7 +26,7 @@ def _run_split(obj, context) -> tuple:
     used_names = set()
 
     try:
-        for kb in splitter_mod.split_candidates(obj):
+        for kb in splitter_mod.selected_split_candidates(obj):
             split_results = splitter_mod.split_shape_key(kb, ctx)
 
             for out_name, positions in split_results.items():
@@ -60,7 +60,7 @@ class SHAPEKEY_OT_split_all(bpy.types.Operator):
     bl_idname = "shapekey_splitter.split_all"
     bl_label = "Split All Shape Keys"
     bl_description = (
-        "Split every shape key into directional L/R and mask variants. "
+        "Split the checked shape keys into directional L/R and mask variants. "
         "Existing outputs with the same name are replaced"
     )
     bl_options = {'REGISTER', 'UNDO'}
@@ -72,6 +72,9 @@ class SHAPEKEY_OT_split_all(bpy.types.Operator):
             return False
         if not splitter_mod.split_candidates(obj):
             cls.poll_message_set("Object has no shape keys to split")
+            return False
+        if not splitter_mod.selected_split_candidates(obj):
+            cls.poll_message_set("No shape keys are checked in the Shape Keys list")
             return False
         return True
 
@@ -86,7 +89,7 @@ class SHAPEKEY_OT_split_all(bpy.types.Operator):
 class SHAPEKEY_OT_regenerate_all(bpy.types.Operator):
     bl_idname = "shapekey_splitter.regenerate_all"
     bl_label = "Regenerate All"
-    bl_description = "Clear the output collection and re-run the full split"
+    bl_description = "Clear the output collection and re-run the split for the checked shape keys"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod

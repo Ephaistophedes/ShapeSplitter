@@ -56,6 +56,16 @@ def split_candidates(obj) -> list:
     ]
 
 
+def is_key_selected(settings, name: str) -> bool:
+    return name not in settings.excluded_keys
+
+
+def selected_split_candidates(obj) -> list:
+    """Split candidates that are checked in the Shape Keys list."""
+    settings = obj.shapekey_splitter
+    return [kb for kb in split_candidates(obj) if is_key_selected(settings, kb.name)]
+
+
 # ---------------------------------------------------------------------------
 # Core split computation
 # ---------------------------------------------------------------------------

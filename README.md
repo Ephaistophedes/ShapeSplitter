@@ -5,7 +5,7 @@ using a configurable center-line blend and painted vertex-group masks. It is bui
 game-engine blendshapes (Unity / Unreal). Every split is baked into its own mesh object in an
 output collection, and a preview mesh gathers all the splits back together as shape keys.
 
-> **Status:** v1.1.0. The first debugging pass is done (see [CHANGELOG.md](CHANGELOG.md));
+> **Status:** v1.2.0. The first debugging pass is done (see [CHANGELOG.md](CHANGELOG.md));
 > open items are tracked in [docs/known_issues.md](docs/known_issues.md).
 
 ## Features
@@ -18,6 +18,8 @@ output collection, and a preview mesh gathers all the splits back together as sh
   - *Bilateral* masks give `<key>_<mask>_L` and `<key>_<mask>_R`.
   - *Single-side* masks give `<key>_<mask>`. The painted weights alone define the region,
     so they work on either side, e.g. `Eye_L` and `Eye_R`.
+- **Shape key selection**: a checklist of the mesh's shape keys, with *Select All* and
+  *Clear Selection*, so only the keys you need are split and exported.
 - **Mirror weights L→R**: paint the left side, then copy the weights to the matching
   right-side vertices. Works per mask or for all enabled bilateral masks. Single-side masks
   are never mirrored.
@@ -64,9 +66,12 @@ Open the **3D Viewport → Sidebar (N) → Shape Splitter** tab with a mesh sele
    *Enter Preview Mode* and adjust the settings live. Click *Exit Preview* to remove the
    temporary `SKS_Preview` key. If you save while previewing, the key is saved too, and
    the panel offers *Exit Preview* after you reopen the file.
-5. Click **Split All Shape Keys**. It replaces outputs of the same name in the output
-   collection. **Regenerate All** clears the collection first, which also removes outputs
-   of shape keys or masks you have deleted since.
+5. In the **Shape Keys** list, check the keys you want to export (all are checked by
+   default, including keys you add later). Use *Select All* / *Clear Selection* for bulk
+   changes and the list's filter field to search by name.
+6. Click **Split All Shape Keys**. It splits the checked keys and replaces outputs of the same name in the
+   output collection. Outputs of unchecked keys from earlier runs are left alone. **Regenerate All** clears the collection first, so it holds only the checked keys'
+   outputs.
 
 ### Output naming (separator `_`)
 

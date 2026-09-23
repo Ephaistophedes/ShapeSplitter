@@ -10,6 +10,7 @@ import bpy
 # PropertyGroups must be registered before any class that references them
 classes = (
     props.MaskRegionItem,
+    props.ShapeKeyNameItem,
     props.CenterLineSettings,
     props.ShapeKeySplitterSettings,
 )
