@@ -5,7 +5,7 @@ using a configurable center-line blend and painted vertex-group masks. It is bui
 game-engine blendshapes (Unity / Unreal). Every split is baked into its own mesh object in an
 output collection, and a preview mesh gathers all the splits back together as shape keys.
 
-> **Status:** v1.2.0. The first debugging pass is done (see [CHANGELOG.md](CHANGELOG.md));
+> **Status:** v1.3.0. The first debugging pass is done (see [CHANGELOG.md](CHANGELOG.md));
 > open items are tracked in [docs/known_issues.md](docs/known_issues.md).
 
 ## Features
@@ -69,7 +69,9 @@ Open the **3D Viewport → Sidebar (N) → Shape Splitter** tab with a mesh sele
 5. In the **Shape Keys** list, check the keys you want to export (all are checked by
    default, including keys you add later). Use *Select All* / *Clear Selection* for bulk
    changes and the list's filter field to search by name.
-6. Click **Split All Shape Keys**. It splits the checked keys and replaces outputs of the same name in the
+6. Pick the **Output** collection from the dropdown, or leave it empty to use (and create)
+   `<Object>_ShapeSplits`. Collections that contain the source object are not offered.
+7. Click **Split All Shape Keys**. It splits the checked keys and replaces outputs of the same name in the
    output collection. Outputs of unchecked keys from earlier runs are left alone. **Regenerate All** clears the collection first, so it holds only the checked keys'
    outputs.
 

@@ -202,16 +202,23 @@ def build_preview_mesh(obj, template_mesh, outputs: list, collection):
 
 def get_or_create_output_collection(obj, settings, scene):
     """
-    Return the output collection, creating it if necessary and making sure it
-    is linked into the scene. Also writes back the resolved name to
-    settings.output_collection.
-    """
-    col_name = settings.output_collection.strip() or f"{obj.name}_ShapeSplits"
-    settings.output_collection = col_name
+    Return the output collection, making sure it is linked into the scene.
 
-    col = bpy.data.collections.get(col_name)
+    Uses settings.target_collection; if that is empty, falls back to a
+    collection named by the legacy settings.output_collection string, then to
+    '<Object>_ShapeSplits' (created if missing). The result is stored in
+    settings.target_collection.
+    """
+    col = settings.target_collection
+    if col is None and settings.output_collection.strip():
+        col = bpy.data.collections.get(settings.output_collection.strip())
     if col is None:
-        col = bpy.data.collections.new(col_name)
+        col_name = f"{obj.name}_ShapeSplits"
+        col = bpy.data.collections.get(col_name) or bpy.data.collections.new(col_name)
+
+    settings.target_collection = col
+    settings.output_collection = ""
+
     if col not in scene.collection.children_recursive:
         scene.collection.children.link(col)
 

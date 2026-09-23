@@ -95,7 +95,7 @@ def run_op(op, obj, **kwargs):
 
 
 def outputs(obj):
-    col = bpy.data.collections[obj.shapekey_splitter.output_collection]
+    col = obj.shapekey_splitter.target_collection
     return {o.name: o for o in col.objects}
 
 
@@ -220,7 +220,7 @@ class TestSplit(unittest.TestCase):
         col = bpy.data.collections.new("Src")
         bpy.context.scene.collection.children.link(col)
         col.objects.link(self.obj)
-        self.obj.shapekey_splitter.output_collection = "Src"
+        self.obj.shapekey_splitter.target_collection = col
         with self.assertRaises(RuntimeError):
             run_op(bpy.ops.shapekey_splitter.regenerate_all, self.obj)
         self.assertIn("Face", bpy.data.objects)
@@ -421,6 +421,54 @@ class TestKeySelection(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Output collection
+# ---------------------------------------------------------------------------
+
+class TestOutputCollection(unittest.TestCase):
+    def setUp(self):
+        reset_scene()
+        self.obj = make_grid()
+        self.obj.shapekey_splitter.include_full_lr = True
+        self.settings = self.obj.shapekey_splitter
+
+    def split(self):
+        self.assertEqual(run_op(bpy.ops.shapekey_splitter.split_all, self.obj), {'FINISHED'})
+
+    def test_empty_creates_default_collection(self):
+        self.split()
+        col = self.settings.target_collection
+        self.assertEqual(col.name, "Face_ShapeSplits")
+        self.assertIn(col, bpy.context.scene.collection.children_recursive)
+        self.assertIn("Smile_L", col.objects)
+
+    def test_picked_collection_is_used_and_survives_rename(self):
+        col = bpy.data.collections.new("Exports")
+        self.settings.target_collection = col
+        self.split()
+        self.assertIn("Smile_L", col.objects)
+        self.assertIn(col, bpy.context.scene.collection.children_recursive)
+        col.name = "Renamed"
+        self.assertEqual(run_op(bpy.ops.shapekey_splitter.regenerate_all, self.obj), {'FINISHED'})
+        self.assertIs(self.settings.target_collection, col)
+        self.assertNotIn("Face_ShapeSplits", bpy.data.collections)
+
+    def test_legacy_name_is_migrated(self):
+        col = bpy.data.collections.new("Old Output")
+        self.settings.output_collection = "Old Output"
+        self.split()
+        self.assertIs(self.settings.target_collection, col)
+        self.assertEqual(self.settings.output_collection, "")
+
+    def test_collections_with_source_are_not_offered(self):
+        from shapekey_splitter.data.props import _poll_output_collection
+        src = bpy.data.collections.new("Src")
+        src.objects.link(self.obj)
+        other = bpy.data.collections.new("Other")
+        self.assertFalse(_poll_output_collection(self.settings, src))
+        self.assertTrue(_poll_output_collection(self.settings, other))
+
+
+# ---------------------------------------------------------------------------
 # Test scene (skipped if the .blend is missing)
 # ---------------------------------------------------------------------------
 
@@ -436,6 +484,8 @@ class TestScene(unittest.TestCase):
         self.assertEqual(run_op(bpy.ops.shapekey_splitter.regenerate_all, self.obj), {'FINISHED'})
         self.assertEqual(run_op(bpy.ops.shapekey_splitter.mirror_weights, self.obj), {'FINISHED'})
         print(f"\n  test scene regenerate + mirror: {time.time() - t:.2f}s", end=" ")
+        # v1.0 stored "Collection 2" as a typed name; it must be migrated, not replaced
+        self.assertEqual(self.obj.shapekey_splitter.target_collection.name, "Collection 2")
         names = set(outputs(self.obj))
         self.assertIn("Ghetto_Asian_Smile_mouth_L", names)
         self.assertIn("Ghetto_Asian_Preview", names)

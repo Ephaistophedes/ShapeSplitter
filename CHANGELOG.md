@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0
+
+- **Output collection is picked from a dropdown** of existing collections instead of typed.
+  Leaving it empty still creates `<Object>_ShapeSplits`. The setting points to the
+  collection itself, so renaming the collection keeps the link.
+- Collections that contain the source object are not offered, so Regenerate All cannot
+  clear the source's own collection.
+- Files saved with a typed collection name are migrated automatically on the next split.
+
 ## 1.2.0
 
 - **Shape key checklist.** The main panel lists the mesh's shape keys with a check mark on

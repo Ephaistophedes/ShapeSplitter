@@ -52,8 +52,12 @@ class SHAPEKEY_PT_main(bpy.types.Panel):
         row = layout.row(align=True)
         row.prop(settings, "naming_separator")
 
-        row = layout.row()
-        row.prop(settings, "output_collection", text="Output Collection")
+        col = layout.column(align=True)
+        col.prop(settings, "target_collection", text="Output", icon='OUTLINER_COLLECTION')
+        if settings.target_collection is None:
+            legacy = settings.output_collection.strip()
+            hint = legacy if legacy in bpy.data.collections else f"{obj.name}_ShapeSplits"
+            col.label(text=f"Empty: uses '{hint}'", icon='INFO')
 
         row = layout.row()
         row.prop(settings, "include_full_lr")

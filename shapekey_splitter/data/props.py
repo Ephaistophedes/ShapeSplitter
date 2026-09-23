@@ -11,6 +11,11 @@ def _update_preview(self, context):
     apply_preview(obj)
 
 
+def _poll_output_collection(self, collection):
+    """Hide collections holding the source object — Regenerate All would clear them."""
+    return self.id_data.name not in collection.objects
+
+
 class MaskRegionItem(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(name="Name", default="Mask", update=_update_preview)
     vertex_group: bpy.props.StringProperty(name="Vertex Group", default="", update=_update_preview)
@@ -123,8 +128,15 @@ class ShapeKeySplitterSettings(bpy.types.PropertyGroup):
         description="Also output the unmasked centerline L and R splits (in addition to masked variants)",
         default=False,
     )
-    output_collection: bpy.props.StringProperty(
+    target_collection: bpy.props.PointerProperty(
         name="Output Collection",
-        description="Name of the collection that receives split mesh objects",
-        default="",
+        description=(
+            "Collection that receives the split mesh objects. Leave empty to create "
+            "'<Object>_ShapeSplits'. Collections that contain the source object are not listed"
+        ),
+        type=bpy.types.Collection,
+        poll=_poll_output_collection,
     )
+    # v1.0–1.2 stored the output collection as a typed name. Read once and
+    # migrated to target_collection by get_or_create_output_collection().
+    output_collection: bpy.props.StringProperty(default="", options={'HIDDEN'})
